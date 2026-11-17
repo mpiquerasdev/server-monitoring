@@ -28,9 +28,20 @@ def send_message(message):
         raise ValueError("Monitoring credentials are missing")
     endpoint = "https://api.telegram.org/bot" + token + "/sendMessage"
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": message, "disable_web_page_preview": "true"}).encode()
-    with urllib.request.urlopen(urllib.request.Request(endpoint, data=data), timeout=20) as response:
-        if not json.load(response).get("ok"):
-            raise RuntimeError("Telegram rejected health alert")
+    request = urllib.request.Request(endpoint, data=data)
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                if not json.load(response).get("ok"):
+                    raise RuntimeError("Telegram rejected health alert")
+            return
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == 4:
+                raise
+        time.sleep(min(2 ** attempt, 8))
 
 
 def probe(url):
