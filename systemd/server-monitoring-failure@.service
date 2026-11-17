@@ -1,0 +1,9 @@
+[Unit]
+Description=Notify Telegram of an unexpected monitoring unit failure
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/server-monitoring.env
+ExecStart=/usr/bin/python3 /opt/server-monitoring/alert-unit-failure.py %i
+User=root

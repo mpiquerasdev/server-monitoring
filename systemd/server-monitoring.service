@@ -2,6 +2,7 @@
 Description=Check public production websites and notify on state changes
 After=network-online.target
 Wants=network-online.target
+OnFailure=server-monitoring-failure@%n.service
 
 [Service]
 Type=oneshot

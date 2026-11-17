@@ -4,7 +4,6 @@
 import json
 import os
 from pathlib import Path
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -57,12 +56,9 @@ def main():
     if STATE_PATH.exists():
         previous = json.loads(STATE_PATH.read_text())
     current = dict(previous)
-    failed = False
     for service, url in SERVICES.items():
         healthy, detail = probe(url)
         old = previous.get(service)
-        if not healthy:
-            failed = True
         if old is None:
             # First run establishes a baseline but still alerts on failures.
             if not healthy:
@@ -78,8 +74,6 @@ def main():
     temporary = STATE_PATH.with_suffix(".tmp")
     temporary.write_text(json.dumps(current, sort_keys=True) + "\n")
     temporary.replace(STATE_PATH)
-    if failed:
-        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 Description=Prune only old unused Docker objects and bounded BuildKit cache
 After=docker.service
 Requires=docker.service
+OnFailure=server-monitoring-failure@%n.service
 
 [Service]
 Type=oneshot
