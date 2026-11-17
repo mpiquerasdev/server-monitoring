@@ -1,0 +1,37 @@
+name: Deployment monitoring
+description: Send a private Telegram status for a production deployment
+inputs:
+  bot-token:
+    required: true
+    description: Telegram Bot API token
+  chat-id:
+    required: true
+    description: Authorized private chat ID
+  service:
+    required: true
+    description: Service name
+  url:
+    required: true
+    description: Public service URL
+  result:
+    required: true
+    description: Deployment job result
+  started-at:
+    required: true
+    description: Unix timestamp recorded at start of job
+  run-url:
+    required: true
+    description: GitHub Actions run URL
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MONITOR_BOT_TOKEN: ${{ inputs.bot-token }}
+        MONITOR_CHAT_ID: ${{ inputs.chat-id }}
+        MONITOR_SERVICE: ${{ inputs.service }}
+        MONITOR_URL: ${{ inputs.url }}
+        MONITOR_RESULT: ${{ inputs.result }}
+        MONITOR_STARTED_AT: ${{ inputs.started-at }}
+        MONITOR_RUN_URL: ${{ inputs.run-url }}
+      run: python3 "${{ github.action_path }}/notify.py"
