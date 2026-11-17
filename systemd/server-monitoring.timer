@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly public production website checks
+
+[Timer]
+OnBootSec=2min
+OnCalendar=hourly
+Persistent=true
+Unit=server-monitoring.service
+
+[Install]
+WantedBy=timers.target
