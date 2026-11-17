@@ -36,13 +36,20 @@ def main():
     endpoint = "https://api.telegram.org/bot" + token + "/sendMessage"
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": message, "disable_web_page_preview": "true"}).encode()
     request = urllib.request.Request(endpoint, data=data, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            payload = json.load(response)
-        if not payload.get("ok"):
-            raise RuntimeError("Telegram rejected deployment notification")
-    except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"Telegram notification failed with HTTP {exc.code}") from None
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                payload = json.load(response)
+            if not payload.get("ok"):
+                raise RuntimeError("Telegram rejected deployment notification")
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
+                raise RuntimeError(f"Telegram notification failed with HTTP {exc.code}") from None
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == 4:
+                raise RuntimeError(f"Telegram notification failed after five attempts: {exc}") from None
+        time.sleep(min(2 ** attempt, 8))
     print(f"Deployment notification delivered for {service} ({result}, {elapsed} s)")
 
 
