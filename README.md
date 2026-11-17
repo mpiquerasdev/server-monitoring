@@ -33,6 +33,16 @@ use `systemctl status gh-runner-<repository>.service` on the VPS and the
 repository's GitHub Actions runner settings. The `server-monitoring` public
 repository intentionally remains on GitHub's hosted runner.
 
+The MyLifeManager Playwright smoke test needs Chromium's system fonts. Install
+`fontconfig-config` and `fonts-liberation` on the VPS and check that
+`/etc/fonts/fonts.conf` exists. Its Verify job checks this before launching the
+browser; `npx playwright install chromium` alone does not install the OS fonts.
+
+Reviok's backend Verify suite uses the separate `reviok-ci-mongo` container on
+`127.0.0.1:27017`, with a tmpfs data directory. It must never use the production
+MongoDB. Check it with
+`docker exec reviok-ci-mongo mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'`.
+
 `docker-cleanup.sh` runs daily and removes only stopped containers, unused
 images and networks older than 72 hours. It caps unused BuildKit cache at
 6 GiB. It never prunes Docker volumes or the 5Sitios bind mount containing
