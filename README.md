@@ -15,3 +15,10 @@ failure, saves the last state in `/var/lib/server-monitoring/status.json`, and
 sends one critical alert per failure and one recovery alert. It does not send
 hourly success noise. Configuration lives in `/etc/server-monitoring.env`
 (mode 0600) and contains only the bot token and authorized private chat ID.
+
+`docker-cleanup.sh` runs daily and removes only stopped containers, unused
+images and networks older than 72 hours. It caps unused BuildKit cache at
+6 GiB. It never prunes Docker volumes or the 5Sitios bind mount containing
+SQLite, Redis and videos. The older 5Sitios-only BuildKit timer is replaced by
+this shared maintenance timer; the separate 5Sitios frontend image cache timer
+remains enabled.
