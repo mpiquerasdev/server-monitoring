@@ -22,7 +22,7 @@ monitoring failure notifier immediately.
 `install-actions-runner.sh` installs one repository-scoped runner on
 `vps-5sitios`. Each runner has its own system user, workspace and label
 `vps-5sitios-<repository>`, without `sudo` or Docker group membership.
-Systemd limits it to 3 GiB and 175% CPU. The completed-job hook removes the
+Systemd limits it to 3 GiB (3.5 GB for MyLifeManager and 5Sitios) and 175% CPU. The completed-job hook removes the
 checked-out source and temporary SSH key. Heavy builds share
 `/run/lock/gh-ci-build.lock`, created by systemd-tmpfiles at boot. Keep that
 lock around any new Next or Docker build stage.

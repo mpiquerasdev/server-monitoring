@@ -19,6 +19,10 @@ service="gh-runner-${repo}.service"
 runner_url="https://github.com/mpiquerasdev/${repo}"
 runner_name="vps-5sitios-${repo}"
 cleanup_hook="/usr/local/libexec/gh-runner-${repo}-job-completed.sh"
+memory_limit=3G
+if [ "$repo" = mylifemanager ] || [ "$repo" = 5sitios ]; then
+  memory_limit=3500M
+fi
 
 printf 'f /run/lock/gh-ci-build.lock 0666 root root -\n' > /etc/tmpfiles.d/gh-ci-build.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/gh-ci-build.conf
@@ -76,6 +80,7 @@ Group=${runner_user}
 WorkingDirectory=${runner_dir}
 Environment=HOME=${runner_home}
 Environment=ACTIONS_RUNNER_HOOK_JOB_COMPLETED=${cleanup_hook}
+ExecStartPre=${cleanup_hook}
 ExecStart=${runner_dir}/run.sh
 Restart=always
 RestartSec=15
@@ -89,7 +94,7 @@ ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 CPUQuota=175%
-MemoryMax=3G
+MemoryMax=${memory_limit}
 TasksMax=1024
 
 [Install]
