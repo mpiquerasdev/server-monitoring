@@ -15,6 +15,23 @@ failure, saves the last state in `/var/lib/server-monitoring/status.json`, and
 sends one critical alert per failure and one recovery alert. It does not send
 hourly success noise. Configuration lives in `/etc/server-monitoring.env`
 (mode 0600) and contains only the bot token and authorized private chat ID.
+The same timer checks installed `gh-runner-*.service` units and alerts on
+failure and recovery. A unit that exhausts its restart limit also invokes the
+monitoring failure notifier immediately.
+
+`install-actions-runner.sh` installs one repository-scoped runner on
+`vps-5sitios`. Each runner has its own system user, workspace and label
+`vps-5sitios-<repository>`, without `sudo` or Docker group membership.
+Systemd limits it to 3 GiB and 175% CPU. The completed-job hook removes the
+checked-out source and temporary SSH key. Heavy builds share
+`/run/lock/gh-ci-build.lock`, created by systemd-tmpfiles at boot. Keep that
+lock around any new Next or Docker build stage.
+
+The registration token is short-lived and must be piped to the installer on
+stdin. Never save it in a workflow, shell history, or log. To inspect a runner,
+use `systemctl status gh-runner-<repository>.service` on the VPS and the
+repository's GitHub Actions runner settings. The `server-monitoring` public
+repository intentionally remains on GitHub's hosted runner.
 
 `docker-cleanup.sh` runs daily and removes only stopped containers, unused
 images and networks older than 72 hours. It caps unused BuildKit cache at
