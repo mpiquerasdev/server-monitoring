@@ -12,6 +12,7 @@ IFS= read -r registration_token
 test -n "$registration_token"
 
 runner_version=2.338.2
+runner_sha256=baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
 runner_user="gha-${repo}"
 runner_dir="/opt/gh-runners/${repo}"
 runner_home="/var/lib/${runner_user}"
@@ -37,6 +38,7 @@ if [ ! -x "$runner_dir/config.sh" ]; then
   curl -fsSL --retry 3 \
     "https://github.com/actions/runner/releases/download/v${runner_version}/actions-runner-linux-x64-${runner_version}.tar.gz" \
     -o "$archive"
+  printf '%s  %s\n' "$runner_sha256" "$archive" | sha256sum --check --status
   tar -xzf "$archive" -C "$runner_dir"
   chown -R "$runner_user:$runner_user" "$runner_dir"
 fi
