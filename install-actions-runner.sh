@@ -21,8 +21,10 @@ runner_url="https://github.com/mpiquerasdev/${repo}"
 runner_name="vps-5sitios-${repo}"
 cleanup_hook="/usr/local/libexec/gh-runner-${repo}-job-completed.sh"
 memory_limit=3G
-if [ "$repo" = mylifemanager ] || [ "$repo" = 5sitios ]; then
+if [ "$repo" = mylifemanager ]; then
   memory_limit=3500M
+elif [ "$repo" = 5sitios ]; then
+  memory_limit=4200000000
 fi
 
 printf 'f /run/lock/gh-ci-build.lock 0666 root root -\n' > /etc/tmpfiles.d/gh-ci-build.conf
