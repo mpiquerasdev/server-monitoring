@@ -12,7 +12,7 @@ import urllib.request
 
 
 SERVICES = {
-    "5Sitios": "https://www.5sitios.com/api/health",
+    "5Sitios": "https://www.5sitios.com/",
     "Reviok": "https://www.reviok.com/",
     "MyLifeManager": "https://mylife.freemyip.com/api/version",
     "TopNimbos Dashboard": "https://topnimbos-dashboard.freemyip.com/",
