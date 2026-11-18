@@ -1,0 +1,28 @@
+name: Deployment retry
+description: Run one deployment command with bounded retries for transient disk pressure
+inputs:
+  command:
+    required: true
+    description: Shell command that performs the already-prepared deployment
+  max-attempts:
+    required: false
+    default: "3"
+    description: Total attempts, including the first
+  initial-delay-seconds:
+    required: false
+    default: "90"
+    description: Delay before the second attempt; later delays grow linearly
+outputs:
+  retry_count:
+    description: Number of retries needed before success
+    value: ${{ steps.retry.outputs.retry_count }}
+runs:
+  using: composite
+  steps:
+    - id: retry
+      shell: bash
+      env:
+        DEPLOY_COMMAND: ${{ inputs.command }}
+        DEPLOY_MAX_ATTEMPTS: ${{ inputs.max-attempts }}
+        DEPLOY_INITIAL_DELAY_SECONDS: ${{ inputs.initial-delay-seconds }}
+      run: bash "${{ github.action_path }}/deploy-with-retry.sh"
