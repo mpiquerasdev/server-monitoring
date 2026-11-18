@@ -73,20 +73,14 @@ def main():
         status = "❌ <b>Falló</b>"
     started_at = int(os.environ["MONITOR_STARTED_AT"])
     elapsed = max(0, int(time.time()) - started_at)
-    metadata = [f"⏱ {elapsed // 60} min {elapsed % 60} s"]
+    elapsed_label = f"{elapsed} s" if elapsed < 60 else f"{elapsed // 60} min {elapsed % 60} s"
+    metadata = [f"⏱ {elapsed_label}"]
     retry_count = os.environ.get("MONITOR_RETRY_COUNT", "0")
     if retry_count.isdigit() and int(retry_count) > 0:
         metadata.append(f"↻ {int(retry_count)} reintento{'s' if int(retry_count) != 1 else ''}")
-    ref = os.environ.get("GITHUB_REF_NAME", "")
-    sha = os.environ.get("GITHUB_SHA", "")[:7]
-    if ref and sha:
-        metadata.append(f"<code>{escape(ref)} · {escape(sha)}</code>")
     message = f"<b>DEPLOY · {escape(service)}</b>\n{status} · {' · '.join(metadata)}"
     if result not in ("success", "cancelled"):
         message += f"\n<b>Motivo:</b> {escape(failure_reason())}"
-    message += "\n<blockquote expandable>" + "\n".join(
-        (f"Servicio: {escape(service)}", f"Resultado: {escape(result)}", f"Web: {escape(url)}", f"Workflow: {escape(run_url)}")
-    ) + "</blockquote>"
     send_message(token, chat_id, message, [button("🌐 Abrir web", url), button("⚙️ Ver workflow", run_url)])
     print(f"Deployment notification delivered for {service} ({result}, {elapsed} s)")
 
