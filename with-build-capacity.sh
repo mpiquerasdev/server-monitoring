@@ -20,6 +20,15 @@ if (( available < minimum_gib )); then
   # for 24 hours: Docker guarantees image prune never removes an image used by
   # any container, including the previous production container kept for rollback.
   docker image prune --all --force
+  # Some tagged Compose build results remain after image prune even with zero
+  # container references. Remove only those exact images, without --force; a
+  # referenced image or a parent layer Docker still needs will be retained.
+  while IFS= read -r image_id; do
+    [[ -n "$image_id" ]] || continue
+    if [[ -z "$(docker ps --all --quiet --filter "ancestor=$image_id")" ]]; then
+      docker image rm "$image_id" || true
+    fi
+  done < <(docker image ls --quiet --no-trunc | sort -u)
   docker network prune --force --filter 'until=24h'
   available="$(available_gib)"
 fi
