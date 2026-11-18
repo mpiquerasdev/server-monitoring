@@ -52,7 +52,7 @@ jobs:
              systemctl is-enabled server-monitoring.timer server-monitoring-docker-cleanup.timer'
       - name: Report deployment to private monitoring bot
         if: ${{ always() }}
-        uses: mpiquerasdev/server-monitoring@b2003d948e70aee42cc1234023446855b2e34cfa
+        uses: mpiquerasdev/server-monitoring@faed23f6254cd54a9ab0caae9438108306d179a2
         with:
           bot-token: ${{ secrets.MONITOR_BOT_TOKEN }}
           chat-id: ${{ secrets.MONITOR_CHAT_ID }}
