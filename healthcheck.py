@@ -7,8 +7,9 @@ from pathlib import Path
 import subprocess
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
+
+from telegram import button, compact, escape, send_message as telegram_send_message
 
 
 SERVICES = {
@@ -22,27 +23,30 @@ SERVICES = {
 STATE_PATH = Path(os.environ.get("MONITOR_STATE_PATH", "/var/lib/server-monitoring/status.json"))
 
 
-def send_message(message):
+def send_message(message, buttons=None):
     token = os.environ["MONITOR_BOT_TOKEN"]
     chat_id = os.environ["MONITOR_CHAT_ID"]
     if not token or not chat_id or not chat_id.lstrip("-").isdigit():
         raise ValueError("Monitoring credentials are missing")
-    endpoint = "https://api.telegram.org/bot" + token + "/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": message, "disable_web_page_preview": "true"}).encode()
-    request = urllib.request.Request(endpoint, data=data)
-    for attempt in range(5):
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                if not json.load(response).get("ok"):
-                    raise RuntimeError("Telegram rejected health alert")
-            return
-        except urllib.error.HTTPError as exc:
-            if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
-                raise
-        except (urllib.error.URLError, TimeoutError):
-            if attempt == 4:
-                raise
-        time.sleep(min(2 ** attempt, 8))
+    telegram_send_message(token, chat_id, message, buttons)
+
+
+def service_alert(service, url, detail=None, recovered=False):
+    state = "✅ <b>Recuperado</b>" if recovered else "🚨 <b>No responde</b>"
+    message = f"<b>SALUD · {escape(service)}</b>\n{state}"
+    if detail:
+        message += f"\n<b>Motivo:</b> {escape(compact(detail, 220))}"
+    message += f"\n<blockquote expandable>URL: {escape(url)}\nSonda pública: 2 intentos</blockquote>"
+    return message
+
+
+def runner_alert(service, unit, recovered=False):
+    state = "✅ <b>Recuperado</b>" if recovered else "🚨 <b>Runner inactivo</b>"
+    return (
+        f"<b>RUNNER · {escape(service)}</b>\n{state}"
+        f"\n<blockquote expandable>Unidad: <code>{escape(unit)}</code>\n"
+        f"Diagnóstico: <code>journalctl -u {escape(unit)}</code></blockquote>"
+    )
 
 
 def probe(url):
@@ -74,12 +78,12 @@ def main():
         if old is None:
             # First run establishes a baseline but still alerts on failures.
             if not healthy:
-                send_message(f"🚨 CRÍTICO: {service} no responde\nURL: {url}\nError: {detail}")
+                send_message(service_alert(service, url, detail), [button("🌐 Abrir servicio", url)])
         elif old != healthy:
             if healthy:
-                send_message(f"✅ RECUPERADO: {service}\nURL: {url}")
+                send_message(service_alert(service, url, recovered=True), [button("🌐 Abrir servicio", url)])
             else:
-                send_message(f"🚨 CRÍTICO: {service} no responde\nURL: {url}\nError: {detail}")
+                send_message(service_alert(service, url, detail), [button("🌐 Abrir servicio", url)])
         current[service] = healthy
         print(f"{service}: {'healthy' if healthy else 'unhealthy'} ({detail})")
     for unit_file in sorted(Path('/etc/systemd/system').glob('gh-runner-*.service')):
@@ -93,9 +97,9 @@ def main():
         old = previous.get(service)
         if (old is None and not healthy) or (old is not None and old != healthy):
             if healthy:
-                send_message(f"✅ RECUPERADO: {service}\nUnidad: {unit}")
+                send_message(runner_alert(service, unit, recovered=True))
             else:
-                send_message(f"🚨 CRÍTICO: {service} no está activo\nRevisar: journalctl -u {unit}")
+                send_message(runner_alert(service, unit))
         current[service] = healthy
         print(f"{service}: {'healthy' if healthy else 'unhealthy'}")
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)

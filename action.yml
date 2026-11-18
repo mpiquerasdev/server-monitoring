@@ -34,4 +34,5 @@ runs:
         MONITOR_RESULT: ${{ inputs.result }}
         MONITOR_STARTED_AT: ${{ inputs.started-at }}
         MONITOR_RUN_URL: ${{ inputs.run-url }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: python3 "${{ github.action_path }}/notify.py"

@@ -3,11 +3,54 @@
 
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
+
+from telegram import button, compact, escape, send_message
+
+
+def failure_reason() -> str:
+    """Read this job's log and return the last actionable failure, never a secret."""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    job_name = os.environ.get("GITHUB_JOB", "")
+    if not all((token, repository, run_id, job_name)):
+        return "No se pudo obtener el motivo automático. Abre el workflow."
+    headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}"}
+    try:
+        jobs_request = urllib.request.Request(
+            f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs?per_page=100", headers=headers
+        )
+        with urllib.request.urlopen(jobs_request, timeout=15) as response:
+            jobs = json.load(response).get("jobs", [])
+        job = next((item for item in jobs if item.get("name") == job_name), None)
+        if not job:
+            return "El job falló antes de poder identificar el paso."
+        log_request = urllib.request.Request(job["logs_url"], headers=headers)
+        with urllib.request.urlopen(log_request, timeout=25) as response:
+            log = response.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError):
+        return "El workflow falló; abre el detalle para ver el paso afectado."
+
+    lines = [compact(line, 360) for line in log.splitlines()]
+    lines = [re.sub(r"^\d{4}-\d\d-\d\dT[\d:.]+Z\s+", "", line) for line in lines]
+    actionable = (
+        r"less than \d+ gib free|no space left|disk.*(full|space)|out of memory|"
+        r"health(check)? .*fail|unhealthy|connection refused|timed out|"
+        r"permission denied|authentication failed|could not recover|missing|required|"
+        r"make: \*\*\*|docker.*error|error response from daemon"
+    )
+    for line in reversed(lines):
+        if re.search(actionable, line, re.IGNORECASE):
+            return line
+    for line in reversed(lines):
+        if re.search(r"terminated|killed", line, re.IGNORECASE):
+            return "El despliegue se interrumpió durante la compilación; producción no se sustituyó."
+    return "El workflow falló; abre el detalle para ver el paso afectado."
 
 
 def main():
@@ -20,36 +63,25 @@ def main():
     if not token or not chat_id or not chat_id.lstrip("-").isdigit():
         raise ValueError("Monitoring bot token or private chat ID is missing")
     if result == "success":
-        label = "✅ Despliegue completado"
+        status = "✅ <b>Publicado</b>"
     elif result == "cancelled":
-        label = "⚠️ Despliegue cancelado"
+        status = "⚠️ <b>Cancelado</b>"
     else:
-        label = "🚨 Despliegue fallido"
+        status = "❌ <b>Falló</b>"
     started_at = int(os.environ["MONITOR_STARTED_AT"])
     elapsed = max(0, int(time.time()) - started_at)
-    message = (
-        f"{label}: {service}\n"
-        f"Tiempo: {elapsed // 60} min {elapsed % 60} s ({elapsed} s)\n"
-        f"Web: {url}\n"
-        f"Detalles: {run_url}"
-    )
-    endpoint = "https://api.telegram.org/bot" + token + "/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": message, "disable_web_page_preview": "true"}).encode()
-    request = urllib.request.Request(endpoint, data=data, method="POST")
-    for attempt in range(5):
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                payload = json.load(response)
-            if not payload.get("ok"):
-                raise RuntimeError("Telegram rejected deployment notification")
-            break
-        except urllib.error.HTTPError as exc:
-            if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
-                raise RuntimeError(f"Telegram notification failed with HTTP {exc.code}") from None
-        except (urllib.error.URLError, TimeoutError) as exc:
-            if attempt == 4:
-                raise RuntimeError(f"Telegram notification failed after five attempts: {exc}") from None
-        time.sleep(min(2 ** attempt, 8))
+    metadata = [f"⏱ {elapsed // 60} min {elapsed % 60} s"]
+    ref = os.environ.get("GITHUB_REF_NAME", "")
+    sha = os.environ.get("GITHUB_SHA", "")[:7]
+    if ref and sha:
+        metadata.append(f"<code>{escape(ref)} · {escape(sha)}</code>")
+    message = f"<b>DEPLOY · {escape(service)}</b>\n{status} · {' · '.join(metadata)}"
+    if result not in ("success", "cancelled"):
+        message += f"\n<b>Motivo:</b> {escape(failure_reason())}"
+    message += "\n<blockquote expandable>" + "\n".join(
+        (f"Servicio: {escape(service)}", f"Resultado: {escape(result)}", f"Web: {escape(url)}", f"Workflow: {escape(run_url)}")
+    ) + "</blockquote>"
+    send_message(token, chat_id, message, [button("🌐 Abrir web", url), button("⚙️ Ver workflow", run_url)])
     print(f"Deployment notification delivered for {service} ({result}, {elapsed} s)")
 
 
