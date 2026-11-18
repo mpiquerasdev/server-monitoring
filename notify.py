@@ -38,18 +38,21 @@ def failure_reason() -> str:
 
     lines = [compact(line, 360) for line in log.splitlines()]
     lines = [re.sub(r"^\d{4}-\d\d-\d\dT[\d:.]+Z\s+", "", line) for line in lines]
-    actionable = (
+    specific_actionable = (
         r"less than \d+ gib free|no space left|disk.*(full|space)|out of memory|"
         r"health(check)? .*fail|unhealthy|connection refused|timed out|"
         r"permission denied|authentication failed|could not recover|missing|required|"
-        r"make: \*\*\*|docker.*error|error response from daemon"
+        r"docker.*error|error response from daemon"
     )
     for line in reversed(lines):
-        if re.search(actionable, line, re.IGNORECASE):
+        if re.search(specific_actionable, line, re.IGNORECASE):
             return line
     for line in reversed(lines):
         if re.search(r"terminated|killed", line, re.IGNORECASE):
             return "El despliegue se interrumpió durante la compilación; producción no se sustituyó."
+    for line in reversed(lines):
+        if re.search(r"make: \*\*\*|error", line, re.IGNORECASE):
+            return line
     return "El workflow falló; abre el detalle para ver el paso afectado."
 
 
