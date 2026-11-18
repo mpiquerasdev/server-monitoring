@@ -9,6 +9,10 @@ concurrency:
   group: server-monitoring-production
   cancel-in-progress: false
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -48,7 +52,7 @@ jobs:
              systemctl is-enabled server-monitoring.timer server-monitoring-docker-cleanup.timer'
       - name: Report deployment to private monitoring bot
         if: ${{ always() }}
-        uses: mpiquerasdev/server-monitoring@c7efc0c01cf92f0bc3ba673350be72be2ee952f7
+        uses: mpiquerasdev/server-monitoring@b2003d948e70aee42cc1234023446855b2e34cfa
         with:
           bot-token: ${{ secrets.MONITOR_BOT_TOKEN }}
           chat-id: ${{ secrets.MONITOR_CHAT_ID }}
