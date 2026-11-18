@@ -7,7 +7,7 @@ set -uo pipefail
 [[ "$DEPLOY_INITIAL_DELAY_SECONDS" =~ ^[1-9][0-9]*$ ]] || { echo 'initial-delay-seconds must be a positive integer' >&2; exit 2; }
 
 is_transient_disk_pressure() {
-  grep -Eqi 'less than [0-9]+ gib free|no space left on device|disk[^[:cntrl:]]*(full|space)' "$1"
+  grep -Eqi 'less than [0-9]+ gib free|no space left on device|disk[^[:cntrl:]]*(full|space)|la build dejó menos de [0-9]+ gib libres|producción necesita al menos [0-9]+ gib libres' "$1"
 }
 
 for ((attempt = 1; attempt <= DEPLOY_MAX_ATTEMPTS; attempt++)); do

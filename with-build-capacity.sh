@@ -16,7 +16,10 @@ if (( available < minimum_gib )); then
   docker buildx prune --all --force --min-free-space "${minimum_gib}GB" --reserved-space 1GB
   # These commands cannot remove a running container, its image or a volume.
   docker container prune --force --filter 'until=24h'
-  docker image prune --all --force --filter 'until=24h'
+  # A failed build can leave a brand-new, unreferenced image. Do not retain it
+  # for 24 hours: Docker guarantees image prune never removes an image used by
+  # any container, including the previous production container kept for rollback.
+  docker image prune --all --force
   docker network prune --force --filter 'until=24h'
   available="$(available_gib)"
 fi
