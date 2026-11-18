@@ -22,6 +22,10 @@ inputs:
   run-url:
     required: true
     description: GitHub Actions run URL
+  retry-count:
+    required: false
+    default: "0"
+    description: Number of transient deployment retries that succeeded
 runs:
   using: composite
   steps:
@@ -34,5 +38,6 @@ runs:
         MONITOR_RESULT: ${{ inputs.result }}
         MONITOR_STARTED_AT: ${{ inputs.started-at }}
         MONITOR_RUN_URL: ${{ inputs.run-url }}
+        MONITOR_RETRY_COUNT: ${{ inputs.retry-count }}
         GITHUB_TOKEN: ${{ github.token }}
       run: python3 "${{ github.action_path }}/notify.py"

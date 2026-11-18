@@ -74,6 +74,9 @@ def main():
     started_at = int(os.environ["MONITOR_STARTED_AT"])
     elapsed = max(0, int(time.time()) - started_at)
     metadata = [f"⏱ {elapsed // 60} min {elapsed % 60} s"]
+    retry_count = os.environ.get("MONITOR_RETRY_COUNT", "0")
+    if retry_count.isdigit() and int(retry_count) > 0:
+        metadata.append(f"↻ {int(retry_count)} reintento{'s' if int(retry_count) != 1 else ''}")
     ref = os.environ.get("GITHUB_REF_NAME", "")
     sha = os.environ.get("GITHUB_SHA", "")[:7]
     if ref and sha:
