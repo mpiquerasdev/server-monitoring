@@ -40,4 +40,6 @@ runs:
         MONITOR_RUN_URL: ${{ inputs.run-url }}
         MONITOR_RETRY_COUNT: ${{ inputs.retry-count }}
         GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_SHA: ${{ github.sha }}
       run: python3 "${{ github.action_path }}/notify.py"

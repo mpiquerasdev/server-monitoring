@@ -56,6 +56,29 @@ def failure_reason() -> str:
     return "El workflow falló; abre el detalle para ver el paso afectado."
 
 
+def commit_subject() -> str | None:
+    """Return this revision's short subject without making alerts depend on it."""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    sha = os.environ.get("GITHUB_SHA", "")
+    if not all((token, repository, sha)):
+        return None
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{repository}/commits/{sha}",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            message = json.load(response).get("commit", {}).get("message", "")
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError):
+        return None
+    subject = str(message).splitlines()[0].strip()
+    return compact(subject, 180) if subject else None
+
+
 def main():
     token = os.environ["MONITOR_BOT_TOKEN"]
     chat_id = os.environ["MONITOR_CHAT_ID"]
@@ -79,6 +102,9 @@ def main():
     if retry_count.isdigit() and int(retry_count) > 0:
         metadata.append(f"↻ {int(retry_count)} reintento{'s' if int(retry_count) != 1 else ''}")
     message = f"<b>DEPLOY · {escape(service)}</b>\n{status} · {' · '.join(metadata)}"
+    subject = commit_subject()
+    if subject:
+        message += f"\n<b>Cambios:</b> <i>{escape(subject)}</i>"
     if result not in ("success", "cancelled"):
         message += f"\n<b>Motivo:</b> {escape(failure_reason())}"
     send_message(token, chat_id, message, [button("🌐 Abrir web", url), button("⚙️ Ver workflow", run_url)])
