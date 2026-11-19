@@ -57,7 +57,15 @@ def send_message(token: str, chat_id: str, message: str, buttons: list[dict] | N
             return
         except urllib.error.HTTPError as exc:
             if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
-                raise RuntimeError(f"Telegram notification failed with HTTP {exc.code}") from None
+                detail = ""
+                try:
+                    detail = compact(exc.read().decode("utf-8", "replace"), 300)
+                except OSError:
+                    pass
+                suffix = f": {detail}" if detail else ""
+                raise RuntimeError(
+                    f"Telegram notification failed with HTTP {exc.code}{suffix}"
+                ) from None
         except (urllib.error.URLError, TimeoutError) as exc:
             if attempt == 4:
                 raise RuntimeError(f"Telegram notification failed after five attempts: {exc}") from None
