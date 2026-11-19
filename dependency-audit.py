@@ -227,7 +227,8 @@ def report(reports: list[dict], updates: int | None, update_error: str | None) -
             remaining = len(item["vulnerabilities"]) - 4
             details.append(f"⚠️ {escape(item['label'])}: {len(item['vulnerabilities'])} · {priorities}{f' +{remaining}' if remaining else ''}")
     details.append(f"Disco: {escape(disk_detail())}")
-    return f"{headline}\n{totals}\n{scanned}/{len(reports)} proyectos auditados\n<b>{server}</b>\n<blockquote expandable>{'<br>'.join(details)}</blockquote>"
+    details_text = "\n".join(details)
+    return f"{headline}\n{totals}\n{scanned}/{len(reports)} proyectos auditados\n<b>{server}</b>\n<blockquote expandable>{details_text}</blockquote>"
 
 
 def main():
