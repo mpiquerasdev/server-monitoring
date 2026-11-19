@@ -64,8 +64,13 @@ jobs:
         if: ${{ inputs.run_dependency_audit }}
         run: |
           set -euo pipefail
-          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes ubuntu@51.68.122.229 \
-            'sudo systemctl start server-monitoring-dependency-audit.service && sudo systemctl is-active --quiet server-monitoring-dependency-audit.service'
+          target=ubuntu@51.68.122.229
+          if ! ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            'sudo systemctl start server-monitoring-dependency-audit.service && sudo systemctl is-active --quiet server-monitoring-dependency-audit.service'; then
+            ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+              'sudo journalctl -u server-monitoring-dependency-audit.service --no-pager -n 80' >&2 || true
+            exit 1
+          fi
       - name: Report deployment to private monitoring bot
         if: ${{ always() }}
         uses: mpiquerasdev/server-monitoring@7976fb83874524804086bc6eeb6030a6150ee0c8
