@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_dependency_audit:
+        description: Send a dependency-audit report after installation
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: server-monitoring-production
@@ -54,6 +60,12 @@ jobs:
              sudo systemctl disable --now 5sitios-docker-build-cache.timer && \
              sudo systemctl start server-monitoring.service && \
              systemctl is-enabled server-monitoring.timer server-monitoring-docker-cleanup.timer server-monitoring-dependency-audit.timer'
+      - name: Send requested dependency audit
+        if: ${{ inputs.run_dependency_audit }}
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes ubuntu@51.68.122.229 \
+            'sudo systemctl start server-monitoring-dependency-audit.service && sudo systemctl is-active --quiet server-monitoring-dependency-audit.service'
       - name: Report deployment to private monitoring bot
         if: ${{ always() }}
         uses: mpiquerasdev/server-monitoring@7976fb83874524804086bc6eeb6030a6150ee0c8
