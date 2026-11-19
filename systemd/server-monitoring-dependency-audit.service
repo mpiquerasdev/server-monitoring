@@ -1,0 +1,15 @@
+[Unit]
+Description=Daily dependency and VPS update audit
+After=network-online.target
+Wants=network-online.target
+OnFailure=server-monitoring-failure@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/server-monitoring.env
+ExecStart=/usr/bin/python3 /opt/server-monitoring/dependency-audit.py
+StateDirectory=server-monitoring
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=25%
+User=root

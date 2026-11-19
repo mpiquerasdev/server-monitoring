@@ -36,21 +36,24 @@ jobs:
         run: |
           set -euo pipefail
           target=ubuntu@51.68.122.229
-          scp -q -i "$HOME/.ssh/id_ed25519" healthcheck.py alert-unit-failure.py telegram.py docker-cleanup.sh with-build-capacity.sh systemd/* "$target:/tmp/"
+          scp -q -i "$HOME/.ssh/id_ed25519" healthcheck.py alert-unit-failure.py telegram.py docker-cleanup.sh with-build-capacity.sh dependency-audit.py capture-dependency-manifest.sh install-dependency-audit-hooks.sh systemd/* "$target:/tmp/"
           ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
             'sudo install -d -m 755 /opt/server-monitoring && \
              sudo install -m 644 /tmp/healthcheck.py /opt/server-monitoring/healthcheck.py && \
              sudo install -m 644 /tmp/alert-unit-failure.py /opt/server-monitoring/alert-unit-failure.py && \
              sudo install -m 644 /tmp/telegram.py /opt/server-monitoring/telegram.py && \
+             sudo install -m 644 /tmp/dependency-audit.py /opt/server-monitoring/dependency-audit.py && \
              sudo install -m 755 /tmp/docker-cleanup.sh /opt/server-monitoring/docker-cleanup.sh && \
              sudo install -m 755 /tmp/with-build-capacity.sh /opt/server-monitoring/with-build-capacity.sh && \
-             sudo install -m 644 /tmp/server-monitoring.service /tmp/server-monitoring.timer /tmp/server-monitoring-docker-cleanup.service /tmp/server-monitoring-docker-cleanup.timer /tmp/server-monitoring-failure@.service /etc/systemd/system/ && \
-             rm -f /tmp/healthcheck.py /tmp/alert-unit-failure.py /tmp/telegram.py /tmp/docker-cleanup.sh /tmp/with-build-capacity.sh /tmp/server-monitoring.service /tmp/server-monitoring.timer /tmp/server-monitoring-docker-cleanup.service /tmp/server-monitoring-docker-cleanup.timer /tmp/server-monitoring-failure@.service && \
+             sudo install -m 755 /tmp/capture-dependency-manifest.sh /tmp/install-dependency-audit-hooks.sh /opt/server-monitoring/ && \
+             sudo install -m 644 /tmp/server-monitoring.service /tmp/server-monitoring.timer /tmp/server-monitoring-docker-cleanup.service /tmp/server-monitoring-docker-cleanup.timer /tmp/server-monitoring-dependency-audit.service /tmp/server-monitoring-dependency-audit.timer /tmp/server-monitoring-failure@.service /etc/systemd/system/ && \
+             sudo /opt/server-monitoring/install-dependency-audit-hooks.sh && \
+             rm -f /tmp/healthcheck.py /tmp/alert-unit-failure.py /tmp/telegram.py /tmp/dependency-audit.py /tmp/capture-dependency-manifest.sh /tmp/install-dependency-audit-hooks.sh /tmp/docker-cleanup.sh /tmp/with-build-capacity.sh /tmp/server-monitoring.service /tmp/server-monitoring.timer /tmp/server-monitoring-docker-cleanup.service /tmp/server-monitoring-docker-cleanup.timer /tmp/server-monitoring-dependency-audit.service /tmp/server-monitoring-dependency-audit.timer /tmp/server-monitoring-failure@.service && \
              sudo systemctl daemon-reload && \
-             sudo systemctl enable --now server-monitoring.timer server-monitoring-docker-cleanup.timer && \
+             sudo systemctl enable --now server-monitoring.timer server-monitoring-docker-cleanup.timer server-monitoring-dependency-audit.timer && \
              sudo systemctl disable --now 5sitios-docker-build-cache.timer && \
              sudo systemctl start server-monitoring.service && \
-             systemctl is-enabled server-monitoring.timer server-monitoring-docker-cleanup.timer'
+             systemctl is-enabled server-monitoring.timer server-monitoring-docker-cleanup.timer server-monitoring-dependency-audit.timer'
       - name: Report deployment to private monitoring bot
         if: ${{ always() }}
         uses: mpiquerasdev/server-monitoring@7976fb83874524804086bc6eeb6030a6150ee0c8

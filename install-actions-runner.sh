@@ -20,6 +20,7 @@ service="gh-runner-${repo}.service"
 runner_url="https://github.com/mpiquerasdev/${repo}"
 runner_name="vps-5sitios-${repo}"
 cleanup_hook="/usr/local/libexec/gh-runner-${repo}-job-completed.sh"
+manifest_capture="/opt/server-monitoring/capture-dependency-manifest.sh"
 memory_limit=3G
 if [ "$repo" = mylifemanager ]; then
   memory_limit=3500M
@@ -58,6 +59,9 @@ cat > "$cleanup_hook" <<HOOK
 #!/usr/bin/env bash
 set -euo pipefail
 workspace='${runner_dir}/_work/${repo}'
+if [ -x '${manifest_capture}' ]; then
+  '${manifest_capture}' '${repo}' "\$workspace" '${runner_home}/dependency-manifest' || true
+fi
 if [ -d "\$workspace" ]; then
   find "\$workspace" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 fi

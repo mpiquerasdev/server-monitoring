@@ -22,6 +22,17 @@ The same timer checks installed `gh-runner-*.service` units and alerts on
 failure and recovery. A unit that exhausts its restart limit also invokes the
 monitoring failure notifier immediately.
 
+`dependency-audit.py` runs daily at 03:00 Europe/Madrid with low CPU and I/O
+priority. It reads dependency manifests captured from the disposable checkouts
+of all six repository runners, queries OSV without installing, updating or
+executing project dependencies, and sends one Telegram summary. The summary
+always separates critical, high, medium and low vulnerabilities, shows pending
+APT updates and keeps per-project details in an expandable section. A project
+without a captured manifest is reported as pending, never as clean. The runner
+hook retains only lockfiles and Python requirements in its private state
+directory; it retains neither source nor runtime environment files. The first
+report can show pending projects until each runner completes one job.
+
 `install-actions-runner.sh` installs one repository-scoped runner on
 `vps-5sitios`. Each runner has its own system user, workspace and label
 `vps-5sitios-<repository>`, without `sudo` or Docker group membership.
