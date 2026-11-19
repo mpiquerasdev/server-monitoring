@@ -32,6 +32,14 @@ REPOSITORIES = {
 MANIFEST_ROOT = Path(
     os.environ.get("DEPENDENCY_AUDIT_MANIFEST_ROOT", "/var/lib")
 )
+LIVE_SOURCE_PATHS = {
+    "5sitios": (Path("/home/ubuntu/5sitios"),),
+    "reviok": (Path("/home/ubuntu/reviok"),),
+    "mylifemanager": (Path("/opt/mylifemanager-worker"),),
+    "topnimbos-dashboard": (Path("/home/ubuntu/topnimbos-dashboard"),),
+    "topnimbos-crm": (Path("/home/ubuntu/topnimbos-crm"),),
+    "victormur": (Path("/home/ubuntu/victormur"),),
+}
 STATE_PATH = Path(
     os.environ.get(
         "DEPENDENCY_AUDIT_STATE_PATH",
@@ -111,6 +119,34 @@ def find_packages(manifest_dir: Path) -> set[tuple[str, str, str]]:
     return packages
 
 
+def live_packages(repo: str) -> set[tuple[str, str, str]]:
+    """Use a persistent deployment checkout only as an initial read-only seed."""
+    packages = set()
+    names = {"package-lock.json", "npm-shrinkwrap.json"}
+    for root in LIVE_SOURCE_PATHS.get(repo, ()):
+        if not root.is_dir():
+            continue
+        for directory, children, files in os.walk(root):
+            relative = Path(directory).relative_to(root)
+            if len(relative.parts) > 3:
+                children[:] = []
+                continue
+            children[:] = [
+                child
+                for child in children
+                if child not in {".git", ".next", "node_modules", "releases"}
+            ]
+            for filename in files:
+                path = Path(directory) / filename
+                if filename in names:
+                    packages.update(npm_packages(path))
+                elif filename == "requirements.txt" or (
+                    filename.startswith("requirements-") and filename.endswith(".txt")
+                ):
+                    packages.update(python_packages(path))
+    return packages
+
+
 def severity(vulnerability: dict) -> str:
     database = vulnerability.get("database_specific") or {}
     value = str(database.get("severity", "")).lower()
@@ -173,6 +209,10 @@ def disk_detail() -> str:
 def audit_repository(repo: str, label: str) -> dict:
     manifest_dir = MANIFEST_ROOT / f"gha-{repo}" / "dependency-manifest"
     packages = find_packages(manifest_dir)
+    source = "runner"
+    if not packages:
+        packages = live_packages(repo)
+        source = "production"
     if not packages:
         return {"repo": repo, "label": label, "status": "missing", "packages": 0, "vulnerabilities": []}
     response, error = osv(packages)
@@ -189,7 +229,7 @@ def audit_repository(repo: str, label: str) -> dict:
                     "summary": compact(item.get("summary", "Sin resumen"), 110),
                 }
             )
-    return {"repo": repo, "label": label, "status": "ok", "packages": len(packages), "vulnerabilities": vulnerabilities}
+    return {"repo": repo, "label": label, "status": "ok", "source": source, "packages": len(packages), "vulnerabilities": vulnerabilities}
 
 
 def audit_all():
@@ -202,33 +242,50 @@ def report(reports: list[dict], updates: int | None, update_error: str | None) -
         for vulnerability in item["vulnerabilities"]:
             counts[vulnerability["severity"]] += 1
     scanned = sum(item["status"] == "ok" for item in reports)
-    headline = f"🔐 <b>DEPENDENCIAS · {time.strftime('%d %b · %H:%M')}</b>"
-    totals = (
-        f"🚨 Críticas: <b>{counts['critical']}</b> · "
-        f"⚠️ Altas: <b>{counts['high']}</b> · "
-        f"• Medias: <b>{counts['medium']}</b> · "
-        f"◦ Bajas: <b>{counts['low']}</b>"
+    pending = [item["label"] for item in reports if item["status"] == "missing"]
+    affected = [item for item in reports if item["vulnerabilities"]]
+    levels = (
+        ("critical", "🚨 Críticas"),
+        ("high", "⚠️ Altas"),
+        ("medium", "• Medias"),
+        ("low", "◦ Bajas"),
+    )
+    totals = " · ".join(
+        f"{label}: <b>{counts[level]}</b>"
+        for level, label in levels
+        if counts[level]
     )
     if counts["unknown"]:
-        totals += f" · ❔ Sin clasificar: <b>{counts['unknown']}</b>"
-    server = f"Servidor: {updates} actualizaciones APT pendientes" if updates is not None else f"Servidor: no se pudo consultar APT ({escape(update_error)})"
+        unknown = f"❔ Sin clasificar: <b>{counts['unknown']}</b>"
+        totals = f"{totals} · {unknown}" if totals else unknown
+    if not totals:
+        totals = "0 vulnerabilidades detectadas"
+    clean = scanned == len(reports) and not affected
+    headline = (
+        f"✅ <b>DEPENDENCIAS · Todo al día</b>"
+        if clean
+        else f"🔐 <b>DEPENDENCIAS · {time.strftime('%d %b · %H:%M')}</b>"
+    )
+    server = (
+        f"Servidor: {updates} actualizaciones APT pendientes"
+        if updates is not None
+        else f"Servidor: no se pudo consultar APT ({escape(update_error)})"
+    )
     details = []
     for item in reports:
-        if item["status"] == "missing":
-            details.append(f"⚪ {escape(item['label'])}: manifiesto pendiente")
-        elif item["status"] == "error":
+        if item["status"] == "error":
             details.append(f"❓ {escape(item['label'])}: consulta no disponible ({escape(item['error'])})")
-        elif not item["vulnerabilities"]:
-            details.append(f"✅ {escape(item['label'])}: {item['packages']} paquetes")
-        else:
+        elif item["vulnerabilities"]:
             priorities = ", ".join(
                 f"{escape(v['package'])} ({escape(v['severity'])})" for v in item["vulnerabilities"][:4]
             )
             remaining = len(item["vulnerabilities"]) - 4
             details.append(f"⚠️ {escape(item['label'])}: {len(item['vulnerabilities'])} · {priorities}{f' +{remaining}' if remaining else ''}")
+    if pending:
+        details.append(f"⏳ {len(pending)} repos aún sin manifiesto; se incorporan tras su próximo CI")
     details.append(f"Disco: {escape(disk_detail())}")
     details_text = "\n".join(details)
-    return f"{headline}\n{totals}\n{scanned}/{len(reports)} proyectos auditados\n<b>{server}</b>\n<blockquote expandable>{details_text}</blockquote>"
+    return f"{headline}\n{totals} · {scanned}/{len(reports)} proyectos auditados\n<b>{server}</b>\n<blockquote expandable>{details_text}</blockquote>"
 
 
 def main():
