@@ -262,21 +262,61 @@ def audit_all():
     reports = [audit_repository(repo, label) for repo, label in REPOSITORIES.items()]
     ids = {vulnerability_id for report in reports for vulnerability_id in report.get("matches", {})}
     details, error = osv_details(ids) if ids else ({}, None)
+
+    # OSV can return the same underlying issue as both a GitHub advisory and
+    # a PyPI advisory. Merge only aliases which are themselves matched by this
+    # scan; unrelated aliases must not create phantom package matches.
+    parent = {vulnerability_id: vulnerability_id for vulnerability_id in ids}
+
+    def root(vulnerability_id: str) -> str:
+        while parent[vulnerability_id] != vulnerability_id:
+            parent[vulnerability_id] = parent[parent[vulnerability_id]]
+            vulnerability_id = parent[vulnerability_id]
+        return vulnerability_id
+
+    def join(first: str, second: str) -> None:
+        first, second = root(first), root(second)
+        if first != second:
+            parent[second] = first
+
+    for vulnerability_id, detail in details.items():
+        for alias in detail.get("aliases") or []:
+            if alias in parent:
+                join(vulnerability_id, alias)
+
     for report in reports:
         matches = report.pop("matches", {})
         if error and matches:
             report["status"] = "error"
             report["error"] = f"No se pudieron obtener severidades OSV: {error}"
             continue
-        report["vulnerabilities"] = [
-            {
-                "packages": sorted(packages),
-                "id": vulnerability_id,
-                "severity": severity(details.get(vulnerability_id, {})),
-                "summary": compact(details.get(vulnerability_id, {}).get("summary", "Sin resumen"), 110),
-            }
-            for vulnerability_id, packages in sorted(matches.items())
-        ]
+        grouped: dict[str, dict] = {}
+        for vulnerability_id, packages in matches.items():
+            group = grouped.setdefault(root(vulnerability_id), {"ids": [], "packages": set()})
+            group["ids"].append(vulnerability_id)
+            group["packages"].update(packages)
+        vulnerabilities = []
+        for group in grouped.values():
+            candidates = sorted(
+                group["ids"],
+                key=lambda item: (not item.startswith("GHSA-"), not item.startswith("CVE-"), item),
+            )
+            vulnerability_id = candidates[0]
+            detail = details.get(vulnerability_id, {})
+            severities = [severity(details.get(item, {})) for item in group["ids"]]
+            priority = {"unknown": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+            vulnerabilities.append(
+                {
+                    "packages": sorted(group["packages"]),
+                    "id": vulnerability_id,
+                    "severity": max(severities, key=lambda item: priority[item]),
+                    "summary": compact(detail.get("summary", "Sin resumen"), 110),
+                }
+            )
+        report["vulnerabilities"] = sorted(
+            vulnerabilities,
+            key=lambda item: ({"critical": 0, "high": 1, "medium": 2, "low": 3, "unknown": 4}[item["severity"]], item["id"]),
+        )
     return reports
 
 
