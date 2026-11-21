@@ -5,6 +5,8 @@ set -euo pipefail
 
 minimum_gib="${BUILD_MIN_FREE_GIB:-12}"
 [[ "$minimum_gib" =~ ^[1-9][0-9]*$ ]] || { echo 'BUILD_MIN_FREE_GIB must be a positive integer' >&2; exit 2; }
+minimum_memory_gib="${BUILD_MIN_AVAILABLE_MEMORY_GIB:-3}"
+[[ "$minimum_memory_gib" =~ ^[1-9][0-9]*$ ]] || { echo 'BUILD_MIN_AVAILABLE_MEMORY_GIB must be a positive integer' >&2; exit 2; }
 
 available_gib() {
   df -BG --output=avail / | tail -n 1 | tr -dc '0-9'
@@ -35,6 +37,12 @@ fi
 
 if (( available < minimum_gib )); then
   echo "Less than ${minimum_gib} GiB free after safe cleanup; live services untouched" >&2
+  exit 75
+fi
+
+available_memory_kib="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)"
+if (( available_memory_kib < minimum_memory_gib * 1024 * 1024 )); then
+  echo "Memory preflight: less than ${minimum_memory_gib} GiB available; live services untouched" >&2
   exit 75
 fi
 
