@@ -25,7 +25,7 @@ memory_limit=3G
 if [ "$repo" = mylifemanager ]; then
   memory_limit=3500M
 elif [ "$repo" = 5sitios ]; then
-  memory_limit=4200000000
+  memory_limit=3G
 fi
 
 printf 'f /run/lock/gh-ci-build.lock 0666 root root -\n' > /etc/tmpfiles.d/gh-ci-build.conf
@@ -103,6 +103,7 @@ ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 CPUQuota=175%
 MemoryMax=${memory_limit}
+MemorySwapMax=0
 TasksMax=1024
 
 [Install]
