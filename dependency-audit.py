@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from telegram import button, compact, escape, send_message
@@ -47,6 +48,7 @@ STATE_PATH = Path(
     )
 )
 OSV_URL = "https://api.osv.dev/v1/querybatch"
+OSV_VULNERABILITY_URL = "https://api.osv.dev/v1/vulns/"
 MAX_QUERIES_PER_BATCH = 500
 
 
@@ -192,6 +194,27 @@ def osv(packages: set[tuple[str, str, str]]) -> tuple[dict[tuple[str, str, str],
     return results, None
 
 
+def osv_details(ids: set[str]) -> tuple[dict[str, dict], str | None]:
+    """Fetch full OSV entries once per advisory.
+
+    querybatch deliberately returns a compact match (normally only the id),
+    so it must not be used to guess the severity or repeat a package four
+    times merely because it appears in several lockfiles.
+    """
+    details = {}
+    try:
+        for vulnerability_id in sorted(ids):
+            request = urllib.request.Request(
+                f"{OSV_VULNERABILITY_URL}{urllib.parse.quote(vulnerability_id, safe='')}",
+                headers={"User-Agent": "server-monitoring/1.0"},
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+                details[vulnerability_id] = json.load(response)
+    except (OSError, ValueError, urllib.error.URLError, urllib.error.HTTPError) as error:
+        return {}, compact(error, 180)
+    return details, None
+
+
 def apt_updates() -> tuple[int | None, str | None]:
     output = run(["apt-get", "-s", "upgrade"], timeout=90)
     if output.startswith("error:"):
@@ -218,22 +241,43 @@ def audit_repository(repo: str, label: str) -> dict:
     response, error = osv(packages)
     if error:
         return {"repo": repo, "label": label, "status": "error", "packages": len(packages), "error": error, "vulnerabilities": []}
-    vulnerabilities = []
+    matches: dict[str, set[str]] = {}
     for package, items in response.items():
         for item in items:
-            vulnerabilities.append(
-                {
-                    "package": f"{package[1]}@{package[2]}",
-                    "id": item.get("id", "OSV"),
-                    "severity": severity(item),
-                    "summary": compact(item.get("summary", "Sin resumen"), 110),
-                }
-            )
-    return {"repo": repo, "label": label, "status": "ok", "source": source, "packages": len(packages), "vulnerabilities": vulnerabilities}
+            vulnerability_id = item.get("id")
+            if isinstance(vulnerability_id, str) and vulnerability_id:
+                matches.setdefault(vulnerability_id, set()).add(f"{package[1]}@{package[2]}")
+    return {
+        "repo": repo,
+        "label": label,
+        "status": "ok",
+        "source": source,
+        "packages": len(packages),
+        "matches": matches,
+        "vulnerabilities": [],
+    }
 
 
 def audit_all():
-    return [audit_repository(repo, label) for repo, label in REPOSITORIES.items()]
+    reports = [audit_repository(repo, label) for repo, label in REPOSITORIES.items()]
+    ids = {vulnerability_id for report in reports for vulnerability_id in report.get("matches", {})}
+    details, error = osv_details(ids) if ids else ({}, None)
+    for report in reports:
+        matches = report.pop("matches", {})
+        if error and matches:
+            report["status"] = "error"
+            report["error"] = f"No se pudieron obtener severidades OSV: {error}"
+            continue
+        report["vulnerabilities"] = [
+            {
+                "packages": sorted(packages),
+                "id": vulnerability_id,
+                "severity": severity(details.get(vulnerability_id, {})),
+                "summary": compact(details.get(vulnerability_id, {}).get("summary", "Sin resumen"), 110),
+            }
+            for vulnerability_id, packages in sorted(matches.items())
+        ]
+    return reports
 
 
 def report(reports: list[dict], updates: int | None, update_error: str | None) -> str:
@@ -277,7 +321,8 @@ def report(reports: list[dict], updates: int | None, update_error: str | None) -
             details.append(f"❓ {escape(item['label'])}: consulta no disponible ({escape(item['error'])})")
         elif item["vulnerabilities"]:
             priorities = ", ".join(
-                f"{escape(v['package'])} ({escape(v['severity'])})" for v in item["vulnerabilities"][:4]
+                f"{escape(', '.join(v['packages'][:2]))} ({escape(v['severity'])})"
+                for v in item["vulnerabilities"][:4]
             )
             remaining = len(item["vulnerabilities"]) - 4
             details.append(f"⚠️ {escape(item['label'])}: {len(item['vulnerabilities'])} · {priorities}{f' +{remaining}' if remaining else ''}")
@@ -312,10 +357,10 @@ if __name__ == "__main__":
                     "status": "ok",
                     "packages": 1,
                     "vulnerabilities": [
-                        {"package": "sample@1", "severity": "critical"},
-                        {"package": "sample@2", "severity": "high"},
-                        {"package": "sample@3", "severity": "medium"},
-                        {"package": "sample@4", "severity": "low"},
+                        {"packages": ["sample@1"], "severity": "critical"},
+                        {"packages": ["sample@2"], "severity": "high"},
+                        {"packages": ["sample@3"], "severity": "medium"},
+                        {"packages": ["sample@4"], "severity": "low"},
                     ],
                 }
             ],
